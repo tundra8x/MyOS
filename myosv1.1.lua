@@ -1,13 +1,14 @@
 -- =========================
--- MyOS v1.0 - Mini OS
+-- MyOS v1.1 - Mini OS
 -- =========================
 
 local w, h = term.getSize()
 
 -- =========================
--- STORAGE
+-- USERS
 -- =========================
 local USERS_FILE = "users.db"
+local CMD_HISTORY_FILE = "cmd_history.txt"
 
 local function loadUsers()
     if not fs.exists(USERS_FILE) then return {} end
@@ -27,7 +28,7 @@ local users = loadUsers()
 local currentUser = nil
 
 -- =========================
--- LOGIN SCREEN
+-- LOGIN
 -- =========================
 local function loginScreen()
     term.setBackgroundColor(colors.black)
@@ -37,7 +38,6 @@ local function loginScreen()
     print("=== MyOS LOGIN ===")
     print("1. Login")
     print("2. Register")
-    print()
 
     write("> ")
     local choice = read()
@@ -79,15 +79,19 @@ local function loginScreen()
 end
 
 -- =========================
--- DESKTOP
+-- APPS
 -- =========================
 local apps = {
     { name = "CMD" },
     { name = "Files" },
+    { name = "Browser" },
     { name = "Notes" },
     { name = "Shutdown" }
 }
 
+-- =========================
+-- DESKTOP
+-- =========================
 local function drawDesktop(selected)
     term.setBackgroundColor(colors.blue)
     term.clear()
@@ -99,10 +103,11 @@ local function drawDesktop(selected)
     end
 
     term.setCursorPos(2, h)
-    write("MyOS | " .. currentUser)
+    term.setTextColor(colors.black)
+    write("MyOS v1.1 | " .. currentUser)
 
     for i, app in ipairs(apps) do
-        term.setBackgroundColor(colors.blue)
+        term.setCursorPos(3, i + 2)
 
         if i == selected then
             term.setTextColor(colors.yellow)
@@ -110,13 +115,27 @@ local function drawDesktop(selected)
             term.setTextColor(colors.white)
         end
 
-        term.setCursorPos(3, i + 2)
         write(app.name)
     end
 end
 
 -- =========================
--- FILE EXPLORER (GUI)
+-- NOTES
+-- =========================
+local function notes()
+    term.clear()
+    term.setCursorPos(1,1)
+
+    print("Notes:")
+    local t = read()
+
+    local f = fs.open("notes.txt", "w")
+    f.write(t)
+    f.close()
+end
+
+-- =========================
+-- FILE EXPLORER
 -- =========================
 local function fileExplorer(path)
     path = path or "/"
@@ -129,7 +148,7 @@ local function fileExplorer(path)
         term.setCursorPos(1,1)
 
         print("FILES: " .. path)
-        print("ENTER=open  BACKSPACE=back")
+        print("ENTER=open | BACKSPACE=back")
 
         for i, f in ipairs(files) do
             if i == selected then
@@ -176,11 +195,90 @@ local function fileExplorer(path)
 end
 
 -- =========================
--- CMD (WITH HISTORY)
+-- BROWSER
+-- =========================
+local websites = {
+    home = {
+        title = "MyOS Web",
+        body = {
+            "Welcome to MyOS Internet",
+            "",
+            "Pages:",
+            "home / about / help"
+        }
+    },
+
+    about = {
+        title = "About",
+        body = {
+            "This is a simulated web system",
+            "Running inside ComputerCraft",
+            "No real internet required"
+        }
+    },
+
+    help = {
+        title = "Help",
+        body = {
+            "Type page name to navigate",
+            "home, about, help",
+            "exit to quit"
+        }
+    }
+}
+
+local function browser()
+    local page = "home"
+
+    while true do
+        term.setBackgroundColor(colors.black)
+        term.clear()
+        term.setCursorPos(1,1)
+
+        local site = websites[page]
+
+        if not site then
+            print("404")
+            page = "home"
+            sleep(1)
+        else
+            term.setTextColor(colors.cyan)
+            print(site.title)
+            print("/" .. page)
+            print("------------")
+
+            term.setTextColor(colors.white)
+            for _, line in ipairs(site.body) do
+                print(line)
+            end
+        end
+
+        write("\n> ")
+        local input = read()
+
+        if input == "exit" then return end
+        if websites[input] then page = input end
+    end
+end
+
+-- =========================
+-- CMD (FIXED + HISTORY)
 -- =========================
 local function cmd()
     local path = "/"
     local history = {}
+
+    if fs.exists(CMD_HISTORY_FILE) then
+        local f = fs.open(CMD_HISTORY_FILE, "r")
+        history = textutils.unserialize(f.readAll()) or {}
+        f.close()
+    end
+
+    local function save()
+        local f = fs.open(CMD_HISTORY_FILE, "w")
+        f.write(textutils.serialize(history))
+        f.close()
+    end
 
     while true do
         term.setBackgroundColor(colors.black)
@@ -189,7 +287,6 @@ local function cmd()
 
         print("CMD - " .. currentUser)
         print("dir: " .. path)
-        print("history:")
 
         for i = math.max(1, #history - 5), #history do
             print(history[i])
@@ -197,7 +294,9 @@ local function cmd()
 
         write("\n> ")
         local input = read()
+
         table.insert(history, input)
+        save()
 
         local args = {}
         for w in string.gmatch(input, "%S+") do
@@ -249,21 +348,26 @@ local function cmd()
 end
 
 -- =========================
--- NOTES
+-- OPEN APP
 -- =========================
-local function notes()
-    term.clear()
-    term.setCursorPos(1,1)
-    print("Notes:")
-    local t = read()
-
-    local f = fs.open("notes.txt", "w")
-    f.write(t)
-    f.close()
+local function openApp(name)
+    if name == "CMD" then
+        cmd()
+    elseif name == "Files" then
+        fileExplorer("/")
+    elseif name == "Browser" then
+        browser()
+    elseif name == "Notes" then
+        notes()
+    elseif name == "Shutdown" then
+        term.setBackgroundColor(colors.black)
+        term.clear()
+        os.shutdown()
+    end
 end
 
 -- =========================
--- MAIN OS LOOP
+-- MAIN LOOP
 -- =========================
 loginScreen()
 
@@ -272,21 +376,13 @@ local selected = 1
 while true do
     drawDesktop(selected)
 
-    local event, key = os.pullEvent()
+    local event, key = os.pullEvent("key")
 
-    if event == "key" then
-        if key == keys.down then
-            selected = math.min(#apps, selected + 1)
-        elseif key == keys.up then
-            selected = math.max(1, selected - 1)
-        elseif key == keys.enter then
-            local app = apps[selected].name
-
-            if app == "CMD" then cmd()
-            elseif app == "Files" then fileExplorer("/")
-            elseif app == "Notes" then notes()
-            elseif app == "Shutdown" then os.shutdown()
-            end
-        end
+    if key == keys.down then
+        selected = math.min(#apps, selected + 1)
+    elseif key == keys.up then
+        selected = math.max(1, selected - 1)
+    elseif key == keys.enter then
+        openApp(apps[selected].name)
     end
 end
