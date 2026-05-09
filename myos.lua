@@ -1,5 +1,6 @@
--- MyOS v0.1
--- Simple ComputerCraft Operating System
+-- =========================
+-- MyOS v0.2 (ComputerCraft OS)
+-- =========================
 
 local w, h = term.getSize()
 
@@ -10,31 +11,21 @@ local text = colors.white
 
 -- Apps
 local apps = {
-    {
-        name = "Notes",
-        x = 3,
-        y = 3
-    },
-    {
-        name = "Snake",
-        x = 15,
-        y = 3
-    },
-    {
-        name = "Shutdown",
-        x = 27,
-        y = 3
-    }
+    { name = "Notes", x = 3, y = 3 },
+    { name = "Snake", x = 15, y = 3 },
+    { name = "Files", x = 27, y = 3 },
+    { name = "Shutdown", x = 3, y = 6 }
 }
 
--- Draw desktop
-local function drawDesktop()
+-- =========================
+-- DRAW DESKTOP
+-- =========================
+local function drawDesktop(selected)
     term.setBackgroundColor(bg)
     term.clear()
 
-    -- Draw taskbar
+    -- Taskbar
     term.setBackgroundColor(taskbar)
-
     for x = 1, w do
         term.setCursorPos(x, h)
         write(" ")
@@ -42,70 +33,145 @@ local function drawDesktop()
 
     term.setCursorPos(2, h)
     term.setTextColor(colors.black)
-    write("MyOS v0.1")
+    write("MyOS v0.2")
 
-    -- Draw app icons
-    term.setBackgroundColor(bg)
-    term.setTextColor(text)
+    -- Apps
+    for i, app in ipairs(apps) do
+        term.setTextColor(text)
+        term.setBackgroundColor(bg)
 
-    for _, app in ipairs(apps) do
+        if selected == i then
+            term.setTextColor(colors.yellow)
+        end
+
         term.setCursorPos(app.x, app.y)
         write("[" .. app.name .. "]")
     end
 end
 
--- Notes app
+-- =========================
+-- NOTES APP
+-- =========================
 local function openNotes()
     term.setBackgroundColor(colors.black)
     term.clear()
-
     term.setCursorPos(1,1)
-    print("=== NOTES ===")
-    print("Type something:")
-    print("")
 
-    local textInput = read()
+    print("=== NOTES ===")
+    print("Type something to save:")
+    print()
+
+    local input = read()
 
     local file = fs.open("notes.txt", "w")
-    file.write(textInput)
+    file.write(input)
     file.close()
 
-    print("")
-    print("Saved!")
+    print("\nSaved!")
     sleep(1.5)
 end
 
--- Snake launcher
+-- =========================
+-- SNAKE LAUNCHER
+-- =========================
 local function openSnake()
     term.clear()
     shell.run("snake")
 end
 
--- Main desktop loop
+-- =========================
+-- FILE EXPLORER
+-- =========================
+local function fileExplorer(path)
+    path = path or "/"
+
+    while true do
+        term.setBackgroundColor(colors.black)
+        term.clear()
+        term.setCursorPos(1,1)
+
+        print("=== FILES: " .. path .. " ===")
+        print("0 = back")
+        print("Enter number to open")
+        print()
+
+        local files = fs.list(path)
+
+        for i, file in ipairs(files) do
+            print(i .. " - " .. file)
+        end
+
+        write("\n> ")
+        local input = read()
+        local choice = tonumber(input)
+
+        if choice == 0 then
+            return
+        end
+
+        local selected = files[choice]
+
+        if selected then
+            local fullPath = fs.combine(path, selected)
+
+            if fs.isDir(fullPath) then
+                fileExplorer(fullPath)
+            else
+                local f = fs.open(fullPath, "r")
+
+                term.clear()
+                term.setCursorPos(1,1)
+
+                print("=== " .. selected .. " ===")
+                print(f.readAll())
+                f.close()
+
+                print("\nPress Enter...")
+                read()
+            end
+        end
+    end
+end
+
+-- =========================
+-- OPEN APP HANDLER
+-- =========================
+local function openApp(appName)
+    if appName == "Notes" then
+        openNotes()
+    elseif appName == "Snake" then
+        openSnake()
+    elseif appName == "Files" then
+        fileExplorer("/")
+    elseif appName == "Shutdown" then
+        term.setBackgroundColor(colors.black)
+        term.clear()
+        term.setCursorPos(1,1)
+        os.shutdown()
+    end
+end
+
+-- =========================
+-- MAIN LOOP (KEYBOARD UI)
+-- =========================
+local selected = 1
+
 while true do
-    drawDesktop()
+    drawDesktop(selected)
 
-    local event, button, x, y = os.pullEvent()
+    local event, key = os.pullEvent("key")
 
-    if event == "mouse_click" then
+    if key == keys.d then
+        selected = selected + 1
+        if selected > #apps then selected = 1 end
+    end
 
-        -- Notes
-        if y == 3 and x >= 3 and x <= 9 then
-            openNotes()
-        end
+    if key == keys.a then
+        selected = selected - 1
+        if selected < 1 then selected = #apps end
+    end
 
-        -- Snake
-        if y == 3 and x >= 15 and x <= 21 then
-            openSnake()
-        end
-
-        -- Shutdown
-        if y == 3 and x >= 27 and x <= 37 then
-            term.setBackgroundColor(colors.black)
-            term.clear()
-            term.setCursorPos(1,1)
-
-            os.shutdown()
-        end
+    if key == keys.enter then
+        openApp(apps[selected].name)
     end
 end
