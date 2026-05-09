@@ -1,5 +1,5 @@
 -- =========================
--- MyOS v0.2 (ComputerCraft OS)
+-- MyOS v0.3 (ComputerCraft OS)
 -- =========================
 
 local w, h = term.getSize()
@@ -14,11 +14,12 @@ local apps = {
     { name = "Notes", x = 3, y = 3 },
     { name = "Snake", x = 15, y = 3 },
     { name = "Files", x = 27, y = 3 },
-    { name = "Shutdown", x = 3, y = 6 }
+    { name = "CMD", x = 3, y = 6 },
+    { name = "Shutdown", x = 15, y = 6 }
 }
 
 -- =========================
--- DRAW DESKTOP
+-- DESKTOP DRAW
 -- =========================
 local function drawDesktop(selected)
     term.setBackgroundColor(bg)
@@ -33,15 +34,16 @@ local function drawDesktop(selected)
 
     term.setCursorPos(2, h)
     term.setTextColor(colors.black)
-    write("MyOS v0.2")
+    write("MyOS v0.3")
 
     -- Apps
     for i, app in ipairs(apps) do
-        term.setTextColor(text)
         term.setBackgroundColor(bg)
 
-        if selected == i then
+        if i == selected then
             term.setTextColor(colors.yellow)
+        else
+            term.setTextColor(text)
         end
 
         term.setCursorPos(app.x, app.y)
@@ -50,7 +52,7 @@ local function drawDesktop(selected)
 end
 
 -- =========================
--- NOTES APP
+-- NOTES
 -- =========================
 local function openNotes()
     term.setBackgroundColor(colors.black)
@@ -58,7 +60,7 @@ local function openNotes()
     term.setCursorPos(1,1)
 
     print("=== NOTES ===")
-    print("Type something to save:")
+    print("Type text to save:")
     print()
 
     local input = read()
@@ -92,8 +94,7 @@ local function fileExplorer(path)
 
         print("=== FILES: " .. path .. " ===")
         print("0 = back")
-        print("Enter number to open")
-        print()
+        print("Select number")
 
         local files = fs.list(path)
 
@@ -101,13 +102,11 @@ local function fileExplorer(path)
             print(i .. " - " .. file)
         end
 
-        write("\n> ")
+        write("> ")
         local input = read()
         local choice = tonumber(input)
 
-        if choice == 0 then
-            return
-        end
+        if choice == 0 then return end
 
         local selected = files[choice]
 
@@ -134,16 +133,116 @@ local function fileExplorer(path)
 end
 
 -- =========================
--- OPEN APP HANDLER
+-- CMD PROMPT
 -- =========================
-local function openApp(appName)
-    if appName == "Notes" then
+local function cmdPrompt()
+    local path = "/"
+
+    while true do
+        term.setBackgroundColor(colors.black)
+        term.clear()
+        term.setCursorPos(1,1)
+
+        term.setTextColor(colors.green)
+        print("MyOS CMD v0.3")
+        print("Type 'help' for commands")
+        print("Dir: " .. path)
+        print("---------------------")
+
+        term.setTextColor(colors.white)
+        write(path .. "> ")
+
+        local input = read()
+        local args = {}
+
+        for word in string.gmatch(input, "%S+") do
+            table.insert(args, word)
+        end
+
+        local cmd = args[1]
+
+        if cmd == "help" then
+            print("Commands:")
+            print("ls, cd, mkdir, touch, rm, cat, exit")
+            sleep(2)
+
+        elseif cmd == "ls" then
+            local files = fs.list(path)
+            for _, f in ipairs(files) do
+                print(f)
+            end
+            sleep(1)
+
+        elseif cmd == "cd" then
+            local target = args[2]
+
+            if target == ".." then
+                path = fs.getDir(path)
+                if path == "" then path = "/" end
+            elseif target then
+                local newPath = fs.combine(path, target)
+                if fs.isDir(newPath) then
+                    path = newPath
+                else
+                    print("Not a directory")
+                    sleep(1)
+                end
+            end
+
+        elseif cmd == "mkdir" then
+            if args[2] then
+                fs.makeDir(fs.combine(path, args[2]))
+            end
+
+        elseif cmd == "touch" then
+            if args[2] then
+                local f = fs.open(fs.combine(path, args[2]), "w")
+                f.write("")
+                f.close()
+            end
+
+        elseif cmd == "rm" then
+            if args[2] then
+                fs.delete(fs.combine(path, args[2]))
+            end
+
+        elseif cmd == "cat" then
+            if args[2] then
+                local f = fs.open(fs.combine(path, args[2]), "r")
+                if f then
+                    print(f.readAll())
+                    f.close()
+                end
+                sleep(2)
+            end
+
+        elseif cmd == "exit" then
+            return
+
+        else
+            print("Unknown command")
+            sleep(1)
+        end
+    end
+end
+
+-- =========================
+-- APP HANDLER
+-- =========================
+local function openApp(name)
+    if name == "Notes" then
         openNotes()
-    elseif appName == "Snake" then
+
+    elseif name == "Snake" then
         openSnake()
-    elseif appName == "Files" then
+
+    elseif name == "Files" then
         fileExplorer("/")
-    elseif appName == "Shutdown" then
+
+    elseif name == "CMD" then
+        cmdPrompt()
+
+    elseif name == "Shutdown" then
         term.setBackgroundColor(colors.black)
         term.clear()
         term.setCursorPos(1,1)
@@ -152,7 +251,7 @@ local function openApp(appName)
 end
 
 -- =========================
--- MAIN LOOP (KEYBOARD UI)
+-- MAIN LOOP
 -- =========================
 local selected = 1
 
